@@ -19,7 +19,7 @@ db-migrate:
 	cd backend && source venv/bin/activate && alembic upgrade head
 
 admin:
-	curl -s -X POST http://localhost:8000/api/auth/create-admin \
+	curl -s -X POST http://localhost:8000/api/v1/auth/create-admin \
 		-H "Content-Type: application/json" \
 		-d '{"username":"admin","email":"admin@example.com","password":"admin123"}' | python3 -m json.tool
 

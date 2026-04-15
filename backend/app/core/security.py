@@ -7,8 +7,14 @@ from fastapi.security import OAuth2PasswordBearer
 
 from app.core.config import settings
 
+def authenticate_admin(username: str, password: str) -> bool:
+    if username != settings.ADMIN_USERNAME:
+        return False
+    return password == settings.ADMIN_PASSWORD
+
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -50,3 +56,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     if username is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return username
+
+async def get_current_admin(username: str = Depends(get_current_user)):
+    if username != "admin": 
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="The user does not have enough privileges"
+        )
+    return username
+

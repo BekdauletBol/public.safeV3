@@ -1,14 +1,157 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+from uuid import UUID
 from loguru import logger
 
-from app.models.analytics import AnalyticsRecord, HourlyAggregate, DailyAggregate
-from app.models.camera import Camera
+from app.db.models.analytics import AnalyticsRecord, HourlyAggregate, DailyAggregate
+from app.db.models.camera import Camera
 
 
 class AnalyticsService:
+    """Supports both instance-style (AnalyticsService(db)) and legacy static calls."""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    # ── Instance methods (used by v1 router) ───────────────────────────────────
+
+    async def get_time_series(
+        self,
+        camera_id: UUID,
+        start: datetime,
+        end: datetime,
+        granularity: str = "hourly",
+    ) -> List[Dict[str, Any]]:
+        """Return time-series data using pre-aggregated tables."""
+        from app.repositories.analytics_repo import AnalyticsRepository
+        repo = AnalyticsRepository(self.db)
+
+        if granularity == "daily":
+            rows = await repo.get_daily_aggregates(camera_id, start, end)
+            return [
+                {
+                    "day_bucket": r.day_bucket.isoformat(),
+                    "avg_count": r.avg_count,
+                    "max_count": r.max_count,
+                    "min_count": r.min_count,
+                    "total_entering": r.total_entering,
+                    "total_exiting": r.total_exiting,
+                    "peak_hour": r.peak_hour,
+                    "sample_count": r.sample_count,
+                }
+                for r in rows
+            ]
+        else:  # hourly (default) or raw
+            rows = await repo.get_hourly_aggregates(camera_id, start, end)
+            return [
+                {
+                    "hour_bucket": r.hour_bucket.isoformat(),
+                    "avg_count": r.avg_count,
+                    "max_count": r.max_count,
+                    "min_count": r.min_count,
+                    "total_entering": r.total_entering,
+                    "total_exiting": r.total_exiting,
+                    "sample_count": r.sample_count,
+                }
+                for r in rows
+            ]
+
+    async def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Current live counts + today totals for all cameras."""
+        from app.repositories.analytics_repo import AnalyticsRepository
+        repo = AnalyticsRepository(self.db)
+
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        totals = await repo.get_system_totals(since=today_start)
+
+        latest = await repo.get_all_cameras_latest()
+        return {
+            "today": totals,
+            "cameras": latest,
+            "generated_at": datetime.utcnow().isoformat(),
+        }
+
+    async def generate_ai_insights(
+        self,
+        camera_id: UUID,
+        start: datetime,
+        end: datetime,
+    ) -> Dict[str, Any]:
+        """Generate simple rule-based insights for a camera over a period."""
+        rows = await self.get_time_series(camera_id, start, end, "hourly")
+        if not rows:
+            return {"summary": "No data available for this period.", "highlights": []}
+
+        total_entering = sum(r.get("total_entering", 0) or 0 for r in rows)
+        total_exiting  = sum(r.get("total_exiting", 0) or 0 for r in rows)
+        peak_row = max(rows, key=lambda r: r.get("avg_count", 0))
+        peak_ts  = peak_row.get("hour_bucket") or peak_row.get("day_bucket", "")
+        peak_val = peak_row.get("avg_count", 0)
+
+        highlights = []
+        if total_entering:
+            highlights.append(f"Total entering: {total_entering:,}")
+        if total_exiting:
+            highlights.append(f"Total exiting: {total_exiting:,}")
+        if peak_ts:
+            highlights.append(f"Peak at {peak_ts[:16]}: {peak_val:.1f} avg people")
+
+        summary = (
+            f"Period {start.date()} – {end.date()}: "
+            f"{len(rows)} data points, "
+            f"peak avg {peak_val:.1f} people."
+        )
+        return {"summary": summary, "highlights": highlights}
+
+    async def run_hourly_aggregation(self) -> int:
+        """Aggregate the previous full hour for all cameras."""
+        from app.repositories.analytics_repo import AnalyticsRepository
+        repo = AnalyticsRepository(self.db)
+
+        now = datetime.utcnow()
+        prev_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
+
+        cameras_result = await self.db.execute(select(Camera))
+        cameras = cameras_result.scalars().all()
+
+        count = 0
+        for cam in cameras:
+            try:
+                await repo.upsert_hourly_aggregate(cam.id, prev_hour)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Hourly agg failed for camera {cam.id}: {e}")
+        await self.db.commit()
+        logger.info(f"Hourly aggregation: processed {count} cameras for {prev_hour}")
+        return count
+
+    async def run_daily_aggregation(self) -> int:
+        """Aggregate yesterday for all cameras."""
+        from app.repositories.analytics_repo import AnalyticsRepository
+        repo = AnalyticsRepository(self.db)
+
+        yesterday = (datetime.utcnow() - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+        cameras_result = await self.db.execute(select(Camera))
+        cameras = cameras_result.scalars().all()
+
+        count = 0
+        for cam in cameras:
+            try:
+                result = await repo.upsert_daily_aggregate(cam.id, yesterday)
+                if result:
+                    count += 1
+            except Exception as e:
+                logger.warning(f"Daily agg failed for camera {cam.id}: {e}")
+        await self.db.commit()
+        logger.info(f"Daily aggregation: processed {count} cameras for {yesterday.date()}")
+        return count
+
+
     @staticmethod
     async def record_count(
         db: AsyncSession,

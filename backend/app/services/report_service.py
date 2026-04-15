@@ -1,12 +1,195 @@
 import os
 import csv
+import io
 from datetime import datetime, timedelta
-from typing import Dict
+from typing import Dict, List, Optional
+from uuid import UUID
 from loguru import logger
 
+from sqlalchemy import select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
-from app.models.report import Report
+from app.db.models.report import Report
 from app.services.analytics_service import AnalyticsService
+
+
+class ReportService:
+    """Instance-based service used by the v1 reports router."""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_reports(
+        self,
+        camera_id: Optional[UUID] = None,
+        limit: int = 50,
+    ) -> List[Report]:
+        query = select(Report).order_by(desc(Report.created_at)).limit(limit)
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def get_report(self, report_id: UUID) -> Optional[Report]:
+        # The old model uses Integer PK; cast UUID → int for compatibility
+        try:
+            rid = int(str(report_id).replace("-", "")[:8], 16) % (2**31)
+        except Exception:
+            return None
+        result = await self.db.execute(select(Report).where(Report.id == rid))
+        report = result.scalar_one_or_none()
+        # Fallback: try raw int if UUID happened to encode a small int
+        if report is None:
+            try:
+                rid2 = int(report_id)
+                result2 = await self.db.execute(select(Report).where(Report.id == rid2))
+                report = result2.scalar_one_or_none()
+            except Exception:
+                pass
+        return report
+
+    async def create_on_demand_report(
+        self,
+        camera_id: Optional[UUID],
+        start: datetime,
+        end: datetime,
+        granularity: str = "hourly",
+    ) -> Report:
+        """Generate analytics summary + PDF and persist as a Report row."""
+        svc = AnalyticsService(self.db)
+
+        if camera_id:
+            time_series = await svc.get_time_series(camera_id, start, end, granularity)
+            insights_data = await svc.generate_ai_insights(camera_id, start, end)
+        else:
+            time_series = []
+            insights_data = {}
+
+        summary = {
+            "total_cameras": 1 if camera_id else 0,
+            "period_start": start.isoformat(),
+            "period_end": end.isoformat(),
+            "cameras": [],
+            "total_traffic": sum(
+                r.get("total_entering", 0) or 0 for r in time_series
+            ),
+            "peak_hour": None,
+            "ai_insights": insights_data.get("summary", ""),
+        }
+
+        os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        pdf_path = os.path.join(settings.REPORTS_DIR, f"report_{ts}.pdf")
+
+        try:
+            await generate_pdf_report(summary, pdf_path)
+        except Exception as e:
+            logger.warning(f"PDF generation skipped: {e}")
+            pdf_path = None
+
+        report = Report(
+            title=f"On-Demand Report {start.strftime('%b %d')} – {end.strftime('%b %d, %Y')}",
+            report_type="custom",
+            period_start=start,
+            period_end=end,
+            file_path=pdf_path,
+            file_format="pdf",
+            status="ready",
+            ai_insights=insights_data.get("summary", ""),
+        )
+        self.db.add(report)
+        await self.db.flush()
+        await self.db.refresh(report)
+        return report
+
+    async def create_weekly_report(
+        self,
+        camera_id: Optional[UUID] = None,
+    ) -> Report:
+        """Thin wrapper around the legacy create_weekly_report function."""
+        return await create_weekly_report(self.db)
+
+    async def create_daily_report(
+        self,
+        camera_id: Optional[UUID] = None,
+        date: Optional[datetime] = None,
+    ) -> Report:
+        target = date or datetime.utcnow()
+        day_start = target.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end   = target.replace(hour=23, minute=59, second=59, microsecond=0)
+
+        svc = AnalyticsService(self.db)
+        if camera_id:
+            time_series = await svc.get_time_series(camera_id, day_start, day_end, "hourly")
+            insights_data = await svc.generate_ai_insights(camera_id, day_start, day_end)
+        else:
+            time_series = []
+            insights_data = {}
+
+        summary = {
+            "total_cameras": 1 if camera_id else 0,
+            "period_start": day_start.isoformat(),
+            "period_end":   day_end.isoformat(),
+            "cameras": [],
+            "total_traffic": sum(r.get("total_entering", 0) or 0 for r in time_series),
+            "peak_hour": None,
+            "ai_insights": insights_data.get("summary", ""),
+        }
+
+        os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        pdf_path = os.path.join(settings.REPORTS_DIR, f"daily_report_{ts}.pdf")
+
+        try:
+            await generate_pdf_report(summary, pdf_path)
+        except Exception as e:
+            logger.warning(f"PDF generation skipped: {e}")
+            pdf_path = None
+
+        report = Report(
+            title=f"Daily Report {target.strftime('%b %d, %Y')}",
+            report_type="daily",
+            period_start=day_start,
+            period_end=day_end,
+            file_path=pdf_path,
+            file_format="pdf",
+            status="ready",
+            ai_insights=insights_data.get("summary", ""),
+        )
+        self.db.add(report)
+        await self.db.flush()
+        await self.db.refresh(report)
+        return report
+
+    async def export_csv(
+        self,
+        camera_id: Optional[UUID],
+        start: datetime,
+        end: datetime,
+        granularity: str = "hourly",
+    ) -> str:
+        """Return CSV content as a string."""
+        svc = AnalyticsService(self.db)
+        rows = await svc.get_time_series(camera_id, start, end, granularity) if camera_id else []
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        if granularity == "daily":
+            writer.writerow(["day_bucket", "avg_count", "max_count", "total_entering", "total_exiting"])
+            for r in rows:
+                writer.writerow([
+                    r.get("day_bucket", ""), r.get("avg_count", 0),
+                    r.get("max_count", 0), r.get("total_entering", 0), r.get("total_exiting", 0),
+                ])
+        else:
+            writer.writerow(["hour_bucket", "avg_count", "max_count", "total_entering", "total_exiting"])
+            for r in rows:
+                writer.writerow([
+                    r.get("hour_bucket", ""), r.get("avg_count", 0),
+                    r.get("max_count", 0), r.get("total_entering", 0), r.get("total_exiting", 0),
+                ])
+        return buf.getvalue()
+
+
 
 
 def generate_ai_insights(summary: Dict) -> str:
@@ -140,7 +323,7 @@ async def generate_csv_report(summary: Dict, file_path: str):
 
 
 async def create_weekly_report(db) -> Report:
-    from app.models.report import Report
+    from app.db.models.report import Report
 
     now = datetime.utcnow()
     period_end = now

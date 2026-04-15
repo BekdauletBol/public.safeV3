@@ -23,7 +23,7 @@ class Base(DeclarativeBase):
 
 
 async def init_db():
-    from app.models import camera, user, analytics, report, roi  # noqa
+    from app.db.models import camera, user, analytics, report, roi, people_count  # noqa
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized")
