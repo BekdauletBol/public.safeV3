@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, BarChart3, FileText, Camera, LogOut, Wifi, WifiOff, Shield
+  LayoutDashboard, BarChart3, FileText, Camera, LogOut, Wifi, WifiOff
 } from 'lucide-react'
 import { useAuthStore, useCameraStore } from '../../store'
 import { useClock } from '../../hooks/useClock'
+
+import myLogo from '../../../src/public.safe.png'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -26,14 +28,16 @@ export default function Layout({ children }) {
         className="w-56 flex flex-col shrink-0 border-r"
         style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
       >
-        {/* Logo */}
+        {/* Logo Section */}
         <div className="px-5 py-5 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(0,212,255,0.15)', border: '1px solid rgba(0,212,255,0.3)' }}
-            >
-              <Shield size={16} style={{ color: 'var(--accent-cyan)' }} />
+            {/* Контейнер для вашего фото */}
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+              <img
+                src={myLogo}
+                alt="Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <div className="font-display font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
@@ -69,10 +73,9 @@ export default function Layout({ children }) {
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${
-                  isActive
-                    ? 'font-medium'
-                    : 'hover:bg-white/5'
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 ${isActive
+                  ? 'font-medium'
+                  : 'hover:bg-white/5'
                 }`
               }
               style={({ isActive }) => ({
@@ -100,7 +103,7 @@ export default function Layout({ children }) {
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Main Content Area */}
       <main className="flex-1 overflow-auto">
         {children}
       </main>
