@@ -65,7 +65,7 @@ export default function AddCameraModal({ onClose, onAdded }) {
 
           <div>
             <label className="label"><MapPin size={11} className="inline mr-1" />Physical Address / Location</label>
-            <input className="input-field" placeholder="e.g. Bogenbay batyr 32, Astana" value={form.address} onChange={set('address')} />
+            <input className="input-field" placeholder="e.g. Dzerjinskoe 2a, Kazakhstan" value={form.address} onChange={set('address')} />
           </div>
 
           <div>
