@@ -8,7 +8,7 @@ from loguru import logger
 
 class RPiClient:
     """
-    Raspberry Pi / Embedded Edge Client for SafeGrid OS.
+    Raspberry Pi / Embedded Edge Client for public.safe.
     """
     def __init__(self, node_id: str, server_url: str, camera_index: int = 0):
         self.node_id = node_id

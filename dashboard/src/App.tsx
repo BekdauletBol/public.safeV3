@@ -19,7 +19,7 @@ const App: React.FC = () => {
           <div className="bg-[#ff6600] p-1.5 rounded-md">
             <Shield size={20} className="text-white" />
           </div>
-          <h1 className="text-lg font-bold tracking-tight">SafeGrid OS <span className="text-gray-400 font-normal">v2.0</span></h1>
+          <h1 className="text-lg font-bold tracking-tight">public.safe <span className="text-gray-400 font-normal">v3.0</span></h1>
         </div>
         <div className="flex gap-6 text-sm font-medium text-gray-500">
           <button onClick={() => setActiveTab('live')} className={`hover:text-[#ff6600] transition-colors ${activeTab === 'live' ? 'text-[#ff6600]' : ''}`}>Live Feed</button>

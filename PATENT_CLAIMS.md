@@ -1,4 +1,4 @@
-# SafeGrid OS | Technical Patent Claims
+# public.safe | Technical Patent Claims
 
 ### Claim 1: Predictive Violation Detection
 A method for predicting pedestrian-to-zone violations comprising:

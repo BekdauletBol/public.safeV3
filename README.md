@@ -1,7 +1,7 @@
-# SafeGrid OS v2.0
+# public.safe v3.0
 ## Intelligent Pedestrian Safety Network
 
-SafeGrid OS is a distributed edge-AI pedestrian safety network designed for B2G (Business-to-Government) city-wide deployments. It utilizes a 3-tier architecture to detect, predict, and propagate pedestrian safety threats in real-time.
+public.safe is a distributed edge-AI pedestrian safety network designed for B2G (Business-to-Government) city-wide deployments. It utilizes a 3-tier architecture to detect, predict, and propagate pedestrian safety threats in real-time.
 
 ### Core Innovations (Patent-Critical)
 1. **Predictive Threat Scoring (PTS)**: Sigmoid-based scoring and Time-To-Collision (TTC) estimation using optical flow velocity vectors.

@@ -8,7 +8,7 @@ from loguru import logger
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="SafeGrid OS - Intelligent Pedestrian Safety Network"
+    description="public.safe - Intelligent Pedestrian Safety Network"
 )
 
 # CORS

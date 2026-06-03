@@ -3,8 +3,8 @@ from typing import List, Tuple
 import os
 
 class Settings(BaseSettings):
-    APP_NAME: str = "SafeGrid OS"
-    APP_VERSION: str = "2.0.0"
+    APP_NAME: str = "public.safe"
+    APP_VERSION: str = "3.0.0"
     
     # YOLO Settings
     YOLO_MODEL: str = "yolov8n.pt"

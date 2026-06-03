@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# SafeGrid OS v2.0 Local Setup Script
+# public.safe v3.0 Local Setup Script
 # This script sets up a virtual environment and starts both backend and frontend.
 
-echo "🚀 Starting SafeGrid OS Local Setup..."
+echo "🚀 Starting public.safe Local Setup..."
 
 # 1. Backend Setup
 echo "📦 Setting up Backend..."
