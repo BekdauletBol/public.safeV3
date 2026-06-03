@@ -1,80 +1,17 @@
-"""
-public.safeV3 — FastAPI application entry point.
-"""
-
-import os
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
-from fastapi.websockets import WebSocket
+from backend.api.websocket import router as ws_router
+from backend.api.rest import router as rest_router
+from backend.config import settings
 from loguru import logger
 
-from app.core.config import settings
-from app.core.logging import setup_logging
-from app.services.stream_manager import stream_manager
-from app.db.session import engine
-
-# ── Router imports (ONLY from app/api/v1, no duplicates) ─────────────────────
-from app.api.v1 import router as api_v1_router
-from app.api.v1.auth import router as auth_router
-from app.api.v1.cameras import router as cameras_router
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application startup / shutdown lifecycle."""
-    setup_logging()
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-
-    os.makedirs(settings.REPORT_OUTPUT_DIR, exist_ok=True)
-    os.makedirs("./logs", exist_ok=True)
-
-    # Auto-start active cameras from DB
-    try:
-        from app.db.session import AsyncSessionLocal
-        from app.repositories.camera_repo import CameraRepository
-        async with AsyncSessionLocal() as db:
-            repo = CameraRepository(db)
-            cameras = await repo.get_all(active_only=True)
-            for cam in cameras:
-                try:
-                    await stream_manager.add_camera(
-                        camera_id=str(cam.id),
-                        rtsp_url=cam.rtsp_url,
-                        fps=cam.fps,
-                        roi_points=cam.roi,
-                        confidence_threshold=cam.detection_confidence,
-                    )
-                    logger.info(f"Auto-started stream: {cam.name}")
-                except Exception as e:
-                    logger.error(f"Failed to start stream for {cam.name}: {e}")
-    except Exception as e:
-        logger.error(f"Camera auto-start failed: {e}")
-
-    logger.info("Application ready")
-    yield
-
-    logger.info("Shutting down streams...")
-    await stream_manager.stop_all()
-    await engine.dispose()
-    logger.info("Shutdown complete")
-
-
-# ── Create app FIRST ──────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AI-powered video surveillance and people counting system",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
-    lifespan=lifespan,
+    description="SafeGrid OS - Intelligent Pedestrian Safety Network"
 )
 
-# ── Middleware ────────────────────────────────────────────────────────────────
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -82,41 +19,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# ── Routers (ALL after app is created) ───────────────────────────────────────
-app.include_router(api_v1_router,  prefix="/api/v1")
-app.include_router(auth_router,    prefix="/api/auth",    tags=["Auth-Alias"])
-app.include_router(cameras_router, prefix="/api/cameras", tags=["Cameras-Alias"])
+# Include Routers
+app.include_router(ws_router)
+app.include_router(rest_router)
 
-# ── Static files ──────────────────────────────────────────────────────────────
-os.makedirs(settings.REPORT_OUTPUT_DIR, exist_ok=True)
-app.mount("/reports", StaticFiles(directory=settings.REPORT_OUTPUT_DIR), name="reports")
+@app.on_event("startup")
+async def startup_event():
+    logger.info("SafeGrid OS Backend Starting...")
 
-# ── WebSocket legacy endpoint ─────────────────────────────────────────────────
-from app.api.v1.websocket import websocket_endpoint
-
-@app.websocket("/ws/live")
-async def websocket_live_route(websocket: WebSocket):
-    await websocket_endpoint(websocket)
-
-
-# ── Health check ──────────────────────────────────────────────────────────────
-@app.get("/health")
-async def health():
-    stream_status = await stream_manager.get_all_status()
-    return {
-        "status": "ok",
-        "version": settings.APP_VERSION,
-        "active_streams": len(stream_status),
-        "streams": stream_status,
-    }
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "type": type(exc).__name__},
-    )
+if __name__ == "__main__":
+    import uvicorn
+    # Use string reference to avoid import issues in some environments
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

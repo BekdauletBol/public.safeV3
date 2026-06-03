@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --bg-card: #0d0d0d;
+    --bg-elevated: #161616;
+
+    --border: rgba(255, 255, 255, 0.08);
+    --border-accent: rgba(255, 255, 255, 0.15);
+
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1a1;
+    --text-muted: #525252;
+
+    --accent-main: #ffffff;
+    --accent-blue: #00d4ff;
+    --accent-green: #00ff9d;
+    --accent-red: #ff3d6b;
+  }
+
+  * {
+    box-sizing: border-box;
+    cursor: default;
+  }
+
+  html,
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #262626;
+    border-radius: 0;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #404040;
+  }
+}
+
+@layer components {
+
+  .card {
+    @apply border;
+    background: var(--bg-card);
+    border-color: var(--border);
+    border-radius: 2px;
+    transition: border-color 0.2s ease;
+  }
+
+  .card:hover {
+    border-color: var(--border-accent);
+  }
+
+  .btn-primary {
+    @apply px-5 py-2 rounded-sm font-medium text-xs transition-all duration-200 uppercase tracking-wider;
+    background: #ffffff;
+    color: #000000;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover {
+    background: #e5e5e5;
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    @apply px-5 py-2 rounded-sm font-medium text-xs transition-all duration-200 border;
+    border-color: var(--border);
+    color: #ffffff;
+    background: transparent;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+  }
+
+  .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--text-secondary);
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-sm text-sm outline-none transition-all duration-200 border;
+    background: #050505;
+    border-color: var(--border);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .input-field:focus {
+    border-color: var(--border-accent);
+    background: #080808;
+  }
+
+  .label {
+    @apply block text-[10px] font-semibold mb-2 uppercase tracking-[0.2em];
+    color: var(--text-muted);
+  }
+
+  .stat-pill {
+    @apply inline-flex items-center gap-2 px-2.5 py-1 border text-[9px] uppercase tracking-widest;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary);
+    border-color: var(--border);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .code-block {
+    @apply p-4 rounded-sm border font-mono text-sm;
+    background: #050505;
+    border-color: var(--border);
+    color: #00d4ff;
+  }
+}
+
+.font-display {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+@keyframes pulse-white {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.live-indicator {
+  @apply w-1.5 h-1.5 rounded-full bg-white;
+  animation: pulse-white 2s infinite ease-in-out;
+}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeGrid OS | Edge Node</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #fafafa; color: #333; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { background: white; padding: 2rem; border-radius: 12px; shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; max-width: 400px; width: 90%; }
+        video { width: 100%; border-radius: 8px; background: #000; margin: 1rem 0; }
+        .status { font-size: 0.875rem; color: #666; margin-bottom: 1rem; }
+        .btn { background: #ff6600; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="margin-top: 0;">SafeGrid OS Edge</h2>
+        <p class="status" id="status">Status: Idle</p>
+        <video id="video" autoplay playsinline muted></video>
+        <input type="text" id="node_id" placeholder="Node ID (e.g. node_01)" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px;">
+        <button class="btn" id="startBtn">Start Streaming</button>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const startBtn = document.getElementById('startBtn');
+        const statusText = document.getElementById('status');
+        const nodeInput = document.getElementById('node_id');
+        let ws;
+        let stream;
+        let interval;
+
+        startBtn.onclick = async () => {
+            const nodeId = nodeInput.value || 'browser_node_' + Math.floor(Math.random() * 1000);
+            statusText.innerText = 'Connecting...';
+            startBtn.disabled = true;
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, frameRate: 15 } });
+                video.srcObject = stream;
+
+                ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/node/${nodeId}`);
+                ws.binaryType = 'arraybuffer';
+
+                ws.onopen = () => {
+                    statusText.innerText = `Connected as ${nodeId}`;
+                    startBtn.innerText = 'Stop Streaming';
+                    startBtn.disabled = false;
+                    
+                    interval = setInterval(() => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        canvas.getContext('2d').drawImage(video, 0, 0);
+                        canvas.toBlob((blob) => {
+                            if (ws.readyState === WebSocket.OPEN) {
+                                ws.send(blob);
+                            }
+                        }, 'image/jpeg', 0.6);
+                    }, 1000 / 15);
+                };
+
+                ws.onclose = () => stop();
+                ws.onerror = (e) => { console.error(e); stop(); };
+
+            } catch (err) {
+                console.error(err);
+                statusText.innerText = 'Error: ' + err.message;
+                startBtn.disabled = false;
+            }
+        };
+
+        function stop() {
+            if (interval) clearInterval(interval);
+            if (ws) ws.close();
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            statusText.innerText = 'Disconnected';
+            startBtn.innerText = 'Start Streaming';
+            startBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>
